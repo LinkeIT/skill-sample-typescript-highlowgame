@@ -50,9 +50,12 @@
   },
   "dependencies": {
     "ask-sdk": "^2.6.0",
+    "ask-sdk-dynamodb-persistence-adapter": "^2.6.0",
     "ask-sdk-core": "^2.6.0",
-    "ask-sdk-model": "^1.16.0",
-    "ask-sdk-s3-persistence-adapter": "^2.6.0"
+    "ask-sdk-model": "^1.18.0",
+    "ask-sdk-s3-persistence-adapter": "^2.6.0",
+    "i18next": "^17.0.1",
+    "i18next-sprintf-postprocessor": "^0.2.2"
   },
   "devDependencies": {
     "@types/i18next": "^8.4.3",
