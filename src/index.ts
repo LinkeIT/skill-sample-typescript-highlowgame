@@ -11,14 +11,22 @@ const i18n = require("i18next");
 import i18next from "i18next";
 import * as sprintf from "i18next-sprintf-postprocessor";
 import { enData } from "./languages/en";
-import { RequestHandler, HandlerInput, ErrorHandler, RequestInterceptor, SkillBuilders } from "ask-sdk";
+import { RequestHandler, HandlerInput, ErrorHandler, RequestInterceptor, SkillBuilders, PersistenceAdapter } from "ask-sdk";
 import { Response, SessionEndedRequest, IntentRequest } from "ask-sdk-model";
-import * as ddbAdapter from "ask-sdk-dynamodb-persistence-adapter"; // included in ask-sdk
+import { DynamoDbPersistenceAdapter } from "ask-sdk-dynamodb-persistence-adapter"; // included in ask-sdk
 import { RequestAttributes } from "./interfaces";
 import { Strings } from "./languages/Strings";
 
 // TODO: The items below this comment need your attention.
 const ddbTableName = "High-Low-Game";
+
+interface SessionAttributes {
+  guessNumber: number;
+  endedSessionCount: number;
+  gamesPlayed: number;
+  gameState: "ENDED" | "STARTED";
+}
+type PersistentAttributes = SessionAttributes;
 
 class LaunchRequest implements RequestHandler {
   public canHandle(handlerInput: HandlerInput): boolean {
@@ -30,13 +38,14 @@ class LaunchRequest implements RequestHandler {
     const attributesManager = handlerInput.attributesManager;
     const responseBuilder = handlerInput.responseBuilder;
 
-    const attributes = await attributesManager.getPersistentAttributes();
-    console.log("getPersistentAttributes");
-    console.log(attributes);
+    let attributes = await attributesManager.getPersistentAttributes() as PersistentAttributes;
     if (Object.keys(attributes).length === 0) {
-      attributes.endedSessionCount = 0;
-      attributes.gamesPlayed = 0;
-      attributes.gameState = "ENDED";
+      attributes = {
+        guessNumber: 0,
+        endedSessionCount: 0,
+        gamesPlayed: 0,
+        gameState: "ENDED",
+      };
     }
 
     attributesManager.setSessionAttributes(attributes);
@@ -102,7 +111,7 @@ class YesIntent implements RequestHandler {
     let isCurrentlyPlaying = false;
     const request = handlerInput.requestEnvelope.request;
     const attributesManager = handlerInput.attributesManager;
-    const sessionAttributes = attributesManager.getSessionAttributes();
+    const sessionAttributes = attributesManager.getSessionAttributes() as SessionAttributes;
 
     if (sessionAttributes.gameState &&
       sessionAttributes.gameState === "STARTED") {
@@ -113,7 +122,7 @@ class YesIntent implements RequestHandler {
   }
   public handle(handlerInput: HandlerInput): Response {
     const attributesManager = handlerInput.attributesManager;
-    const sessionAttributes = attributesManager.getSessionAttributes();
+    const sessionAttributes = attributesManager.getSessionAttributes() as SessionAttributes;
     const requestAttributes = handlerInput.attributesManager.getRequestAttributes() as RequestAttributes;
 
     sessionAttributes.gameState = "STARTED";
@@ -134,7 +143,7 @@ class NoIntent implements RequestHandler {
     let isCurrentlyPlaying = false;
     const request = handlerInput.requestEnvelope.request;
     const attributesManager = handlerInput.attributesManager;
-    const sessionAttributes = attributesManager.getSessionAttributes();
+    const sessionAttributes = attributesManager.getSessionAttributes() as SessionAttributes;
 
     if (sessionAttributes.gameState &&
       sessionAttributes.gameState === "STARTED") {
@@ -145,7 +154,7 @@ class NoIntent implements RequestHandler {
   }
   public async handle(handlerInput: HandlerInput): Promise<Response> {
     const attributesManager = handlerInput.attributesManager;
-    const sessionAttributes = attributesManager.getSessionAttributes();
+    const sessionAttributes = attributesManager.getSessionAttributes() as SessionAttributes;
     const requestAttributes = handlerInput.attributesManager.getRequestAttributes() as RequestAttributes;
 
     sessionAttributes.endedSessionCount += 1;
@@ -181,7 +190,7 @@ class NumberGuessIntent implements RequestHandler {
     let isCurrentlyPlaying = false;
     const request = handlerInput.requestEnvelope.request;
     const attributesManager = handlerInput.attributesManager;
-    const sessionAttributes = attributesManager.getSessionAttributes();
+    const sessionAttributes = attributesManager.getSessionAttributes() as SessionAttributes;
 
     if (sessionAttributes.gameState &&
       sessionAttributes.gameState === "STARTED") {
@@ -195,7 +204,7 @@ class NumberGuessIntent implements RequestHandler {
     const { intent } = requestEnvelope.request as IntentRequest;
 
     const guessNum = parseInt(intent.slots!.number.value!, 10);
-    const sessionAttributes = attributesManager.getSessionAttributes();
+    const sessionAttributes = attributesManager.getSessionAttributes() as SessionAttributes;
     const targetNum = sessionAttributes.guessNumber;
     const requestAttributes = handlerInput.attributesManager.getRequestAttributes() as RequestAttributes;
 
@@ -253,7 +262,7 @@ class FallbackHandler implements RequestHandler {
   }
   public handle(handlerInput: HandlerInput): Response {
     const attributesManager = handlerInput.attributesManager;
-    const sessionAttributes = attributesManager.getSessionAttributes();
+    const sessionAttributes = attributesManager.getSessionAttributes() as SessionAttributes;
     const requestAttributes = handlerInput.attributesManager.getRequestAttributes() as RequestAttributes;
 
     if (sessionAttributes.gameState &&
@@ -310,7 +319,7 @@ export class LocalizationInterceptor implements RequestInterceptor {
   }
 }
 
-function getPersistenceAdapter(tableName: string) {
+function getPersistenceAdapter(tableName: string): PersistenceAdapter {
   // Determines persistence adapter to be used based on environment
   // Note: tableName is only used for DynamoDB Persistence Adapter
   if (process.env.S3_PERSISTENCE_BUCKET) {
@@ -323,7 +332,7 @@ function getPersistenceAdapter(tableName: string) {
   }
 
   // Not in Alexa Hosted Environment
-  return new ddbAdapter.DynamoDbPersistenceAdapter({
+  return new DynamoDbPersistenceAdapter({
     tableName,
     createTable: true,
   });
